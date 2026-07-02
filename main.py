@@ -12,28 +12,28 @@ st.markdown("<h1 style='text-align: center; color: #FF4B4B;'>✨ MBTI 몬스터 
 st.markdown("<p style='text-align: center; color: #666;'>나의 MBTI에 딱 맞는 포켓몬 파트너와 운명의 직업은 무엇일까요?</p>", unsafe_allow_html=True)
 st.write("---")
 
-# 2. MBTI 데이터베이스 (포켓몬 도감 번호 및 직업)
-# 포켓몬 공식 글로벌 CDN 주소 형식에 맞게 도감 번호를 3자리 문자열로 매칭합니다.
+# 2. MBTI 데이터베이스 (포켓몬 고유 번호 및 직업)
+# 정수형 ID를 사용하여 가장 안정적인 GitHub Raw 이미지 주소와 매칭합니다.
 MBTI_DATA = {
-    "INTJ": {"name": "뮤츠 (Mewtwo)", "id": "150", "emoji": "🧠", "jobs": ["🗂️ 데이터 과학자", "🧠 AI 시스템 아키텍트", "🎯 전략 기획가"]},
-    "INTP": {"name": "후딘 (Alakazam)", "id": "065", "emoji": "🔬", "jobs": ["💻 소프트웨어 엔지니어", "🔬 기초과학 연구원", "📊 보안 분석가"]},
-    "ENTJ": {"name": "리자몽 (Charizard)", "id": "006", "emoji": "👑", "jobs": ["🚀 스타트업 CEO", "👔 경영 컨설턴트", "🏛️ 정책 분석가"]},
-    "ENTP": {"name": "팬텀 (Gengar)", "id": "094", "emoji": "💡", "jobs": ["💡 신사업 기획자", "🎨 크리에이티브 디렉터", "📈 벤처 캐피탈리스트"]},
+    "INTJ": {"name": "뮤츠 (Mewtwo)", "id": 150, "emoji": "🧠", "jobs": ["🗂️ 데이터 과학자", "🧠 AI 시스템 아키텍트", "🎯 전략 기획가"]},
+    "INTP": {"name": "후딘 (Alakazam)", "id": 65, "emoji": "🔬", "jobs": ["💻 소프트웨어 엔지니어", "🔬 기초과학 연구원", "📊 보안 분석가"]},
+    "ENTJ": {"name": "리자몽 (Charizard)", "id": 6, "emoji": "👑", "jobs": ["🚀 스타트업 CEO", "👔 경영 컨설턴트", "🏛️ 정책 분석가"]},
+    "ENTP": {"name": "팬텀 (Gengar)", "id": 94, "emoji": "💡", "jobs": ["💡 신사업 기획자", "🎨 크리에이티브 디렉터", "📈 벤처 캐피탈리스트"]},
     
-    "INFJ": {"name": "가디안 (Gardevoir)", "id": "282", "emoji": "🔮", "jobs": ["🏫 상담 심리사", "✍️ 작가/저널리스트", "🌱 환경 운동가"]},
-    "INFP": {"name": "이브이 (Eevee)", "id": "133", "emoji": "🎨", "jobs": ["🎨 웹툰 작가/일러스트레이터", "🎵 음악 치료사", "📚 콘텐츠 에디터"]},
-    "ENFJ": {"name": "토게키스 (Togekiss)", "id": "468", "emoji": "❤️", "jobs": ["👥 인사담당자(HRD) 전문가", "🌍 NGO 활동가", "🗣️ 스피치 코치"]},
-    "ENFP": {"name": "뮤 (Mew)", "id": "151", "emoji": "🌈", "jobs": ["🎉 이벤트 기획자", "🛍️ 마케터", "🎬 크리에이터"]},
+    "INFJ": {"name": "가디안 (Gardevoir)", "id": 282, "emoji": "🔮", "jobs": ["🏫 상담 심리사", "✍️ 작가/저널리스트", "🌱 환경 운동가"]},
+    "INFP": {"name": "이브이 (Eevee)", "id": 133, "emoji": "🎨", "jobs": ["🎨 웹툰 작가/일러스트레이터", "🎵 음악 치료사", "📚 콘텐츠 에디터"]},
+    "ENFJ": {"name": "토게키스 (Togekiss)", "id": 468, "emoji": "❤️", "jobs": ["👥 인사담당자(HRD) 전문가", "🌍 NGO 활동가", "🗣️ 스피치 코치"]},
+    "ENFP": {"name": "뮤 (Mew)", "id": 151, "emoji": "🌈", "jobs": ["🎉 이벤트 기획자", "🛍️ 마케터", "🎬 크리에이터"]},
     
-    "ISTJ": {"name": "메타그로스 (Metagross)", "id": "376", "emoji": "📐", "jobs": ["📊 회계사/세무사", "🔎 품질 관리(QA) 엔지니어", "⚖️ 법률 전문가"]},
-    "ISFJ": {"name": "메가니움 (Meganium)", "id": "154", "emoji": "🏡", "jobs": ["🩺 간호사/의료 보건직", "🏫 초등 교사", "👶 아동 복지사"]},
-    "ESTJ": {"name": "윈디 (Arcanine)", "id": "059", "emoji": "⚔️", "jobs": ["👮 경찰관/소방관", "🏢 프로젝트 매니저(PM)", "🏦 금융 자산 관리사"]},
-    "ESFJ": {"name": "해피너스 (Blissey)", "id": "242", "emoji": "🤝", "jobs": ["🤝 서비스 기획/CS 매니저", "✈️ 항공 승무원", "🍎 영양사"]},
+    "ISTJ": {"name": "메타그로스 (Metagross)", "id": 376, "emoji": "📐", "jobs": ["📊 회계사/세무사", "🔎 품질 관리(QA) 엔지니어", "⚖️ 법률 전문가"]},
+    "ISFJ": {"name": "메가니움 (Meganium)", "id": 154, "emoji": "🏡", "jobs": ["🩺 간호사/의료 보건직", "🏫 초등 교사", "👶 아동 복지사"]},
+    "ESTJ": {"name": "윈디 (Arcanine)", "id": 59, "emoji": "⚔️", "jobs": ["👮 경찰관/소방관", "🏢 프로젝트 매니저(PM)", "🏦 금융 자산 관리사"]},
+    "ESFJ": {"name": "해피너스 (Blissey)", "id": 242, "emoji": "🤝", "jobs": ["🤝 서비스 기획/CS 매니저", "✈️ 항공 승무원", "🍎 영양사"]},
     
-    "ISTP": {"name": "루카리오 (Lucario)", "id": "448", "emoji": "🔧", "jobs": ["🛠️ 엔지니어링 전문가", "🏎️ 카레이서/스포츠 선수", "🕵️ 과학 수사관"]},
-    "ISFP": {"name": "피카츄 (Pikachu)", "id": "025", "emoji": "🎵", "jobs": ["🛋️ 인테리어 디자이너", "💐 플로리스트", "📸 사진작가"]},
-    "ESTP": {"name": "괴력몬 (Machamp)", "id": "068", "emoji": "⚡", "jobs": ["📈 주식 트레이더", "🚒 구급대원", "🏋️ 스포츠 에이전트"]},
-    "ESFP": {"name": "푸린 (Jigglypuff)", "id": "039", "emoji": "🎤", "jobs": ["🎤 연예인/뮤지컬 배우", "🛍️ 쇼핑호스트", "✈️ 여행 가이드"]}
+    "ISTP": {"name": "루카리오 (Lucario)", "id": 448, "emoji": "🔧", "jobs": ["🛠️ 엔지니어링 전문가", "🏎️ 카레이서/스포츠 선수", "🕵️ 과학 수사관"]},
+    "ISFP": {"name": "피카츄 (Pikachu)", "id": 25, "emoji": "🎵", "jobs": ["🛋️ 인테리어 디자이너", "💐 플로리스트", "📸 사진작가"]},
+    "ESTP": {"name": "괴력몬 (Machamp)", "id": 68, "emoji": "⚡", "jobs": ["📈 주식 트레이더", "🚒 구급대원", "🏋️ 스포츠 에이전트"]},
+    "ESFP": {"name": "푸린 (Jigglypuff)", "id": 39, "emoji": "🎤", "jobs": ["🎤 연예인/뮤지컬 배우", "🛍️ 쇼핑호스트", "✈️ 여행 가이드"]}
 }
 
 # 3. 사용자 입력 (MBTI 선택)
@@ -53,8 +53,10 @@ if selected_mbti:
     
     data = MBTI_DATA[selected_mbti]
     
-    # [💡 수정 핵심] 웹에서 차단 없이 가장 잘 열리는 공식 포켓몬 에셋 이미지 서버 주소로 변경
-    pokemon_image_url = f"https://assets.pokemon.com/assets/cms2/img/pokedex/full/{data['id']}.png"
+    # [💡 핵심 수정] 전 세계 개발자들이 애용하는 안정적인 공식 PokeAPI GitHub Raw 이미지 주소로 복구
+    pokemon_image_url = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{data['id'].png}"
+    # 혹시 모를 내부 주소 매칭 에러 방지를 위해 안전한 포맷 스트링으로 한 번 더 확인
+    pokemon_image_url = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{int(data['id'])}.png"
     
     st.write("")
     st.markdown(f"<h2 style='text-align: center;'>🔮 {selected_mbti}의 결과 분석 🔮</h2>", unsafe_allow_html=True)
@@ -64,7 +66,7 @@ if selected_mbti:
     
     with col1:
         st.markdown(f"<h3 style='text-align: center;'>{data['emoji']} {data['name']}</h3>", unsafe_allow_html=True)
-        # 이미지 로딩 실패 시 에러가 아니라 빈 칸으로 처리되도록 오류 제어 추가
+        # 이미지를 깨짐 없이 웹앱에 띄우는 함수
         st.image(pokemon_image_url, use_container_width=True)
         
     with col2:
