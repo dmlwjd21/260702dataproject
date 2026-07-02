@@ -28,8 +28,28 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 이 파일은 pages/01_인구분석.py 에 위치 → 저장소 루트는 한 단계 위(parent.parent)
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+def _find_data_dir() -> tuple[Path, list[Path]]:
+    """
+    data 폴더가 정확히 어디 있는지 몰라도 찾아내기 위한 다중 탐색.
+    (프로젝트 구조가 pages/ 하위든, 루트든, cwd 기준이든 상관없이 동작)
+    반환: (찾은 경로 또는 첫 후보, 탐색한 모든 후보 목록) — 진단용으로 후보 목록도 함께 반환
+    """
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parent / "data",                # pages/data (같은 폴더)
+        here.parent.parent / "data",         # 루트/data (pages 바로 위)
+        here.parent.parent.parent / "data",  # 혹시 더 깊이 중첩된 경우
+        Path.cwd() / "data",                 # streamlit 실행 위치(보통 저장소 루트) 기준
+        here.parent.parent,                  # data 폴더 없이 루트에 CSV가 바로 있는 경우
+        Path.cwd(),                          # 위와 동일 (cwd 기준)
+    ]
+    for c in candidates:
+        if c.exists() and list(c.glob("*.csv")):
+            return c, candidates
+    return candidates[1], candidates  # 못 찾으면 가장 유력한 후보를 기본값으로
+
+
+DATA_DIR, _DATA_DIR_CANDIDATES = _find_data_dir()
 
 COLOR_MAIN = "#4C6EF5"
 COLOR_SUB = "#FF8787"
@@ -226,6 +246,18 @@ with st.spinner("데이터를 불러오는 중이에요... ⏳"):
 
 if tidy_all.empty:
     st.error("⚠️ 사용할 수 있는 데이터가 없습니다. CSV 파일을 업로드해 주세요.")
+    with st.expander("🔧 왜 기본 데이터가 안 보일까요? (배포 문제 진단)"):
+        st.markdown(
+            "아래 경로들을 순서대로 찾아봤지만 `data` 폴더 안에서 CSV를 찾지 못했어요:\n\n"
+            + "\n".join(f"- `{c}`  {'✅ 존재' if c.exists() else '❌ 없음'}"
+                         for c in _DATA_DIR_CANDIDATES)
+            + "\n\n**가장 흔한 원인**\n"
+            "1. GitHub 저장소에 `data` 폴더 자체가 커밋되지 않았어요 "
+            "(`.gitignore`에 `data/`가 포함돼 있는지 확인해보세요).\n"
+            "2. CSV 파일 이름이나 확장자가 잘못 올라갔어요.\n"
+            "3. Streamlit Cloud의 'Manage app > Reboot'을 아직 안 눌러서 "
+            "예전 빌드가 캐시돼 있어요."
+        )
     st.stop()
 
 metrics = build_wide_metrics(tidy_all)
