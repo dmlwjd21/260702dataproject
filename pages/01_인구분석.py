@@ -28,7 +28,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-DATA_DIR = Path(__file__).parent / "data"
+# 이 파일은 pages/01_인구분석.py 에 위치 → 저장소 루트는 한 단계 위(parent.parent)
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 COLOR_MAIN = "#4C6EF5"
 COLOR_SUB = "#FF8787"
