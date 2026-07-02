@@ -138,47 +138,33 @@ def load_stock_info(ticker: str) -> dict:
     t = yf.Ticker(ticker, session=get_yf_session())
 
     # 1) fast_info: 훨씬 안정적인 경량 API (시세 관련 핵심 정보)
-    shares_outstanding = None
     try:
         fi = t.fast_info
         result["currency"] = fi.get("currency")
         result["marketCap"] = fi.get("market_cap")
         result["fiftyTwoWeekHigh"] = fi.get("year_high")
         result["fiftyTwoWeekLow"] = fi.get("year_low")
-        shares_outstanding = fi.get("shares")
-        result["lastPrice"] = fi.get("last_price")
+        result["sharesOutstanding"] = fi.get("shares")
     except Exception:
         pass
 
     # 2) info: PER처럼 fast_info에 없는 값을 위해 보조로 시도 (최대 2회 재시도)
-    trailing_eps = None
     for _ in range(2):
         try:
             info = t.info
             if info:
                 for key in ("trailingPE", "currency", "marketCap",
-                            "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "sharesOutstanding"):
-                    if result.get(key) in (None, "N/A") and info.get(key) not in (None, "N/A"):
+                            "fiftyTwoWeekHigh", "fiftyTwoWeekLow",
+                            "sharesOutstanding", "trailingEps"):
+                    if result.get(key) in (None, "N/A", 0) and info.get(key) not in (None, "N/A"):
                         result[key] = info.get(key)
-                trailing_eps = info.get("trailingEps")
-                if shares_outstanding in (None, 0) and info.get("sharesOutstanding"):
-                    shares_outstanding = info.get("sharesOutstanding")
                 break
         except Exception:
             continue
 
-    # 3) 그래도 시가총액이 없으면 '현재가 × 발행주식수'로 직접 계산
-    if result.get("marketCap") in (None, "N/A") and shares_outstanding and result.get("lastPrice"):
-        result["marketCap"] = result["lastPrice"] * shares_outstanding
-        result["marketCapEstimated"] = True
-
-    # 4) 그래도 PER이 없으면 '현재가 ÷ 주당순이익'으로 직접 계산
-    if result.get("trailingPE") in (None, "N/A") and trailing_eps and result.get("lastPrice"):
-        try:
-            result["trailingPE"] = result["lastPrice"] / trailing_eps
-            result["perEstimated"] = True
-        except ZeroDivisionError:
-            pass
+    # 참고: 시가총액/PER이 여전히 없으면 이 함수 밖(메인 화면)에서
+    # 이미 확보된 실제 종가(latest_close)를 이용해 직접 계산해요.
+    # fast_info의 last_price는 자주 NULL이 나와서 계산 재료로 쓰지 않아요.
 
     return result
 
@@ -313,6 +299,26 @@ if week52_high in (None, "N/A") or week52_low in (None, "N/A"):
     week52_high = week52_high if week52_high not in (None, "N/A") else computed_high
     week52_low = week52_low if week52_low not in (None, "N/A") else computed_low
 
+# 시가총액이 없으면 '실제 종가 × 발행주식수'로 직접 계산
+# (fast_info의 last_price는 자주 NULL이라, 이미 확보된 latest_close를 사용)
+market_cap = info.get("marketCap")
+market_cap_estimated = False
+shares_outstanding = info.get("sharesOutstanding")
+if market_cap in (None, "N/A") and shares_outstanding:
+    market_cap = latest_close * shares_outstanding
+    market_cap_estimated = True
+
+# PER이 없으면 '실제 종가 ÷ 주당순이익(EPS)'으로 직접 계산
+per_value = info.get("trailingPE")
+per_estimated = False
+trailing_eps = info.get("trailingEps")
+if per_value in (None, "N/A") and trailing_eps:
+    try:
+        per_value = latest_close / trailing_eps
+        per_estimated = True
+    except ZeroDivisionError:
+        pass
+
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric(
     label=f"현재가 ({currency})",
@@ -322,23 +328,29 @@ c1.metric(
 c2.metric("52주 최고가", format_number(week52_high))
 c3.metric("52주 최저가", format_number(week52_low))
 
-market_cap_label = "시가총액 (추정)" if info.get("marketCapEstimated") else "시가총액"
-c4.metric(market_cap_label, format_number(info.get("marketCap")))
+market_cap_label = "시가총액 (추정)" if market_cap_estimated else "시가총액"
+c4.metric(market_cap_label, format_number(market_cap))
 
-per_value = info.get("trailingPE")
-per_label = "PER (추정)" if info.get("perEstimated") else "PER"
+per_label = "PER (추정)" if per_estimated else "PER"
 c5.metric(per_label, f"{per_value:.2f}" if isinstance(per_value, (int, float)) else "정보 없음")
 
-if per_value in (None, "N/A") or info.get("marketCap") in (None, "N/A"):
+if per_value in (None, "N/A") or market_cap in (None, "N/A"):
     st.caption(
         "ℹ️ PER · 시가총액은 Yahoo Finance API가 응답하지 않을 때 '정보 없음'으로 표시돼요. "
         "새로고침하거나 잠시 후 다시 시도해보세요. (지수처럼 애초에 PER이 없는 종목도 있어요)"
     )
 
 with st.expander("🔧 디버그: 원본 데이터 확인"):
-    st.write("이 종목에 대해 Yahoo Finance에서 실제로 받아온 값이에요. "
-              "'정보 없음'이 계속 나올 때 어떤 값이 비어있는지 확인해보세요.")
+    st.write("Yahoo Finance에서 실제로 받아온 원본 값이에요.")
     st.json(info)
+    st.write("최종 계산/표시된 값:")
+    st.json({
+        "latest_close(실제 종가)": latest_close,
+        "market_cap(최종)": market_cap,
+        "market_cap_estimated": market_cap_estimated,
+        "per(최종)": per_value,
+        "per_estimated": per_estimated,
+    })
 
 st.markdown("---")
 
