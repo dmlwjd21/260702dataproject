@@ -114,10 +114,67 @@ def load_stock_data(ticker: str, start: datetime, end: datetime) -> pd.DataFrame
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_stock_info(ticker: str) -> dict:
+    """
+    yf.Ticker.info는 Yahoo Finance 스크래핑 방식이라 자주 실패하거나
+    빈 값을 반환해요. 좀 더 안정적인 fast_info를 우선 사용하고,
+    안 되면 info를 최대 2번까지 재시도합니다.
+    """
+    result = {}
+    t = yf.Ticker(ticker)
+
+    # 1) fast_info: 훨씬 안정적인 경량 API (시세 관련 핵심 정보)
     try:
-        return yf.Ticker(ticker).info
+        fi = t.fast_info
+        result["currency"] = fi.get("currency")
+        result["marketCap"] = fi.get("market_cap")
+        result["fiftyTwoWeekHigh"] = fi.get("year_high")
+        result["fiftyTwoWeekLow"] = fi.get("year_low")
     except Exception:
-        return {}
+        pass
+
+    # 2) info: PER처럼 fast_info에 없는 값을 위해 보조로 시도 (최대 2회 재시도)
+    for _ in range(2):
+        try:
+            info = t.info
+            if info:
+                for key in ("trailingPE", "currency", "marketCap",
+                            "fiftyTwoWeekHigh", "fiftyTwoWeekLow"):
+                    if result.get(key) in (None, "N/A") and info.get(key) not in (None, "N/A"):
+                        result[key] = info.get(key)
+                break
+        except Exception:
+            continue
+
+    return result
+
+
+def infer_currency(ticker: str, info_currency) -> str:
+    """info/fast_info에서 통화를 못 가져왔을 때 티커 접미사로 추정."""
+    if info_currency:
+        return info_currency
+    if ticker.upper().endswith((".KS", ".KQ")):
+        return "KRW"
+    return "USD"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_52week_range(ticker: str):
+    """info/fast_info가 실패할 경우를 대비해, 최근 1년치 데이터에서
+    직접 52주 최고/최저가를 계산합니다."""
+    try:
+        hist = yf.download(
+            ticker,
+            start=datetime.today() - timedelta(days=365),
+            end=datetime.today(),
+            progress=False,
+        )
+        if isinstance(hist.columns, pd.MultiIndex):
+            hist.columns = hist.columns.get_level_values(0)
+        if hist.empty:
+            return None, None
+        return float(hist["High"].max()), float(hist["Low"].min())
+    except Exception:
+        return None, None
 
 
 def format_number(num):
@@ -210,7 +267,15 @@ latest_close = float(df["Close"].iloc[-1])
 prev_close = float(df["Close"].iloc[-2]) if len(df) > 1 else latest_close
 change = latest_close - prev_close
 change_pct = (change / prev_close * 100) if prev_close else 0
-currency = info.get("currency", "")
+currency = infer_currency(ticker, info.get("currency"))
+
+# info/fast_info에서 52주 최고·최저가를 못 가져왔으면 실데이터로 직접 계산
+week52_high = info.get("fiftyTwoWeekHigh")
+week52_low = info.get("fiftyTwoWeekLow")
+if week52_high in (None, "N/A") or week52_low in (None, "N/A"):
+    computed_high, computed_low = load_52week_range(ticker)
+    week52_high = week52_high if week52_high not in (None, "N/A") else computed_high
+    week52_low = week52_low if week52_low not in (None, "N/A") else computed_low
 
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric(
@@ -218,11 +283,18 @@ c1.metric(
     value=f"{latest_close:,.2f}",
     delta=f"{change:+,.2f} ({change_pct:+.2f}%)",
 )
-c2.metric("52주 최고가", format_number(info.get("fiftyTwoWeekHigh")))
-c3.metric("52주 최저가", format_number(info.get("fiftyTwoWeekLow")))
+c2.metric("52주 최고가", format_number(week52_high))
+c3.metric("52주 최저가", format_number(week52_low))
 c4.metric("시가총액", format_number(info.get("marketCap")))
 per_value = info.get("trailingPE")
-c5.metric("PER", f"{per_value:.2f}" if isinstance(per_value, (int, float)) else "정보 없음")
+c5.metric("PER", f"{per_value:.2f}" if isinstance(per_value, (int, float)) else "정보 없음*")
+
+if per_value in (None, "N/A") or info.get("marketCap") in (None, "N/A"):
+    st.caption(
+        "ℹ️ PER · 시가총액은 Yahoo Finance의 상세 정보(API)가 일시적으로 응답하지 않을 때 "
+        "'정보 없음'으로 표시될 수 있어요. 페이지를 새로고침하거나 잠시 후 다시 시도해보세요. "
+        "(지수처럼 애초에 PER이 존재하지 않는 종목도 있어요)"
+    )
 
 st.markdown("---")
 
