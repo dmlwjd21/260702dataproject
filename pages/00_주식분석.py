@@ -149,6 +149,7 @@ def load_stock_info(ticker: str) -> dict:
         pass
 
     # 2) info: PER처럼 fast_info에 없는 값을 위해 보조로 시도 (최대 2회 재시도)
+    info = {}
     for _ in range(2):
         try:
             info = t.info
@@ -161,6 +162,27 @@ def load_stock_info(ticker: str) -> dict:
                 break
         except Exception:
             continue
+
+    # 2-1) trailingPE/trailingEps가 없으면 Yahoo가 다른 이름으로 주는 값이 있는지 확인
+    if result.get("trailingPE") in (None, "N/A") and isinstance(info.get("forwardPE"), (int, float)):
+        result["trailingPE"] = info.get("forwardPE")
+        result["perSource"] = "forwardPE(예상 실적 기준, 확정 실적 아님)"
+
+    if result.get("trailingEps") in (None, "N/A"):
+        alt_eps = info.get("epsTrailingTwelveMonths") or info.get("epsCurrentYear")
+        if isinstance(alt_eps, (int, float)):
+            result["trailingEps"] = alt_eps
+
+    # 2-2) EPS 자체가 없으면 '순이익 ÷ 발행주식수'로 직접 계산 시도
+    if result.get("trailingEps") in (None, "N/A"):
+        net_income = info.get("netIncomeToCommon")
+        shares = result.get("sharesOutstanding")
+        if isinstance(net_income, (int, float)) and shares:
+            result["trailingEps"] = net_income / shares
+            result["epsSource"] = "netIncomeToCommon / sharesOutstanding"
+
+    # 디버그용: Yahoo가 실제로 준 원본 전체 딕셔너리 보존
+    result["_raw_info"] = info
 
     # 참고: 시가총액/PER이 여전히 없으면 이 함수 밖(메인 화면)에서
     # 이미 확보된 실제 종가(latest_close)를 이용해 직접 계산해요.
@@ -336,13 +358,15 @@ c5.metric(per_label, f"{per_value:.2f}" if isinstance(per_value, (int, float)) e
 
 if per_value in (None, "N/A") or market_cap in (None, "N/A"):
     st.caption(
-        "ℹ️ PER · 시가총액은 Yahoo Finance API가 응답하지 않을 때 '정보 없음'으로 표시돼요. "
-        "새로고침하거나 잠시 후 다시 시도해보세요. (지수처럼 애초에 PER이 없는 종목도 있어요)"
+        "ℹ️ 시가총액·PER·EPS 관련 필드를 Yahoo Finance가 이 종목에 대해 "
+        "아예 제공하지 않는 경우 '정보 없음'이 정확한 표시예요. "
+        "(특히 한국 거래소 종목은 Yahoo의 재무 데이터가 비어있는 경우가 종종 있어요)"
     )
 
 with st.expander("🔧 디버그: 원본 데이터 확인"):
-    st.write("Yahoo Finance에서 실제로 받아온 원본 값이에요.")
-    st.json(info)
+    st.write("정리해서 사용 중인 값:")
+    st.json({k: v for k, v in info.items() if k != "_raw_info"})
+
     st.write("최종 계산/표시된 값:")
     st.json({
         "latest_close(실제 종가)": latest_close,
@@ -351,6 +375,10 @@ with st.expander("🔧 디버그: 원본 데이터 확인"):
         "per(최종)": per_value,
         "per_estimated": per_estimated,
     })
+
+    st.write("Yahoo가 이 종목에 대해 실제로 보낸 전체 원본 데이터 "
+              "(다른 필드명으로 PER/EPS 관련 값이 있는지 여기서 직접 확인할 수 있어요):")
+    st.json(info.get("_raw_info", {}))
 
 st.markdown("---")
 
